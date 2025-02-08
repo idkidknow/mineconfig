@@ -1,10 +1,12 @@
-package com.idkidknow.mineconfig.vanilla
+package com.idkidknow.mineconfig.model.vanilla
 
 import cats.Monad
 import cats.syntax.all.*
-import com.idkidknow.mineconfig.effect.Download
+import com.idkidknow.mineconfig.algebra.Download
 import fs2.io.file.Path
-import io.circe.{Codec, Decoder, Encoder}
+import io.circe.Codec
+import io.circe.Decoder
+import io.circe.Encoder
 import org.http4s.Uri
 
 final case class ArtifactDescription(

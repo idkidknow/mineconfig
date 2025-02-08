@@ -1,11 +1,13 @@
 package build
 
+import $ivy.`com.goyeau::mill-scalafix::0.5.0`
+import com.goyeau.mill.scalafix.ScalafixModule
 import mill._
 import mill.api.Loose
 import mill.scalalib._
 import mill.scalalib.publish.{Developer, License, PomSettings, VersionControl}
 
-object mineconfig extends ScalaModule with PublishModule {
+object mineconfig extends ScalaModule with PublishModule with ScalafixModule {
   override def scalaVersion = "3.6.3"
 
   override def scalacPluginIvyDeps: T[Loose.Agg[Dep]] = Agg(
@@ -25,6 +27,8 @@ object mineconfig extends ScalaModule with PublishModule {
     ivy"io.circe::circe-generic:$circeVersion",
     ivy"io.circe::circe-parser:$circeVersion",
     ivy"io.circe::circe-optics:0.15.0",
+    ivy"io.get-coursier:coursier_2.13:2.1.24",
+    ivy"io.get-coursier:coursier-jvm_2.13:2.1.24",
   )
 
   override def pomSettings: T[PomSettings] = PomSettings(

@@ -1,4 +1,4 @@
-package com.idkidknow.mineconfig.vanilla
+package com.idkidknow.mineconfig.model.vanilla
 
 /** @param name
  *    one of "windows", "osx" or "linux"

@@ -1,14 +1,19 @@
-package com.idkidknow.mineconfig.effect
+package com.idkidknow.mineconfig.algebra
 
 import cats.MonadThrow
 import cats.effect.kernel.Async
-import cats.effect.std.{Console, Semaphore}
+import cats.effect.std.Console
+import cats.effect.std.Semaphore
 import cats.syntax.all.*
 import fs2.Stream
-import fs2.hashing.{HashAlgorithm, Hashing}
-import fs2.io.file.{Files, Path}
+import fs2.hashing.HashAlgorithm
+import fs2.hashing.Hashing
+import fs2.io.file.Files
+import fs2.io.file.Path
+import org.http4s.Method
+import org.http4s.Request
+import org.http4s.Uri
 import org.http4s.client.Client
-import org.http4s.{Method, Request, Uri}
 
 trait Download[F[_]] {
   def downloadFile(url: Uri, dest: Path): F[Unit]

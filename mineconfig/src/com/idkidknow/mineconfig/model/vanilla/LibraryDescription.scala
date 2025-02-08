@@ -1,4 +1,4 @@
-package com.idkidknow.mineconfig.vanilla
+package com.idkidknow.mineconfig.model.vanilla
 
 import cats.syntax.all.*
 import com.idkidknow.mineconfig.utils.given
