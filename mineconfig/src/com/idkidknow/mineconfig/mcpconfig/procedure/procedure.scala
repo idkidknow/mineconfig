@@ -2,6 +2,7 @@ package com.idkidknow.mineconfig.mcpconfig.procedure
 
 import cats.effect.Concurrent
 import cats.effect.implicits.*
+import cats.effect.kernel.Async
 import cats.syntax.all.*
 import com.idkidknow.mineconfig.algebra.JarArchive
 import com.idkidknow.mineconfig.algebra.MavenCache
@@ -9,18 +10,21 @@ import com.idkidknow.mineconfig.algebra.StringRW
 import com.idkidknow.mineconfig.algebra.ZipFile
 import com.idkidknow.mineconfig.mcpconfig.model.FunctionDescription
 import com.idkidknow.mineconfig.utils.*
+import com.idkidknow.mineconfig.vanilla.model.ArtifactDescription
 import fs2.Stream
 import fs2.io.file.Files
 import fs2.io.file.Path
 import io.circe.Decoder
 import io.circe.Json
+import io.circe.Printer
 import io.circe.optics.JsonPath.root
 import io.circe.syntax.*
 
+import java.util.jar.Manifest
+
 private def readConfigJson[F[_]: Concurrent](zipFile: ZipFile[F]): F[Json] = {
-  val str: F[String] = zipFile.readEntry("config.json")
-    .through(fs2.text.utf8.decode)
-    .compile.string
+  val str: F[String] = zipFile.readEntryAsString("config.json")
+    .flatMap(_.expect("config.json not found"))
   str.map(io.circe.parser.parse).rethrow
 }
 
@@ -70,3 +74,64 @@ def strip[F[_]: {Concurrent, Files, JarArchive}](
   .through(JarArchive[F].archive)
   .through(Files[F].writeAll(output))
   .compile.drain
+
+/** Main part of `listLibraries` function in mcpconfig when the arg `bundle` is
+ *  provided.
+ *
+ *  Extracts libraries from the bundle and writes a description file in format
+ *  `List[ArtifactDescription.Local]`. (see [[ArtifactDescription.Local]])
+ */
+def listBundleLibraries[F[_]: {Async as F, ZipFile.Read, Files}](
+    bundle: Path,
+    outputLibrariesDir: Path,
+    outputArtifactInfos: Path,
+): F[Unit] = ZipFile.Read[F].read(bundle).use { zipFile =>
+  val checkFormat: F[Unit] = for {
+    optStream <- zipFile.readEntry("META-INF/MANIFEST.MF")
+    manifestStream <- optStream.expect("MANIFEST.MF not found")
+    manifest <- manifestStream.through(fs2.io.toInputStream)
+      .map(new Manifest(_))
+      .compile.onlyOrError
+    optFormat = Option(manifest.getMainAttributes.getValue("Bundler-Format"))
+    format <- optFormat.expect("Attribute \"Bundler-Format\" not found")
+    _ <-
+      if (format != "1.0")
+        F.raiseError(new RuntimeException("Unsupported format"))
+      else F.unit
+  } yield ()
+
+  for {
+    _ <- checkFormat
+    optStr <- zipFile.readEntryAsString("META-INF/libraries.list")
+    librariesStr <- optStr.expect("libraries.list not found")
+    lines = Stream(librariesStr).through(fs2.text.lines).toList
+    libraries: List[(String, Path)] <- lines.flatMap { line =>
+      line.split('\t') match {
+        case Array(_, mavenName, entryName) =>
+          List((mavenName, entryName))
+        case _ => Nil
+      }
+    }.parTraverse { case (mavenName, entryName) =>
+      val dest: Path = outputLibrariesDir.resolve(entryName)
+
+      @SuppressWarnings(Array("org.wartremover.warts.Any"))
+      val extract: F[Unit] =
+        dest.parent.map(Files[F].createDirectories(_)).sequence.void >>
+          Stream.eval(
+            zipFile.readEntry(show"META-INF/libraries/$entryName")
+              .flatMap(_.expect(show"Library $entryName not found"))
+          ).flatten.through(Files[F].writeAll(dest))
+            .compile.drain
+
+      extract >> (mavenName, dest).pure[F]
+    }
+    desc = libraries.map { case (mavenName, path) =>
+      ArtifactDescription.Local(mavenName, path, None)
+    }
+    _ <- StringRW[F].writeString(
+      outputArtifactInfos,
+      Printer.spaces2.copy(dropNullValues = true)
+        .print(desc.asJson),
+    )
+  } yield ()
+}
