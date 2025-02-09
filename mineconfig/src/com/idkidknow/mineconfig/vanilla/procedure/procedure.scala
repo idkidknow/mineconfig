@@ -1,14 +1,14 @@
-package com.idkidknow.mineconfig.procedure.vanilla
+package com.idkidknow.mineconfig.vanilla.procedure
 
 import cats.MonadThrow
 import cats.Parallel
 import cats.syntax.all.*
 import com.idkidknow.mineconfig.algebra.Download
 import com.idkidknow.mineconfig.algebra.StringRW
-import com.idkidknow.mineconfig.model.vanilla.ArtifactDescription
-import com.idkidknow.mineconfig.model.vanilla.LibraryDescription
-import com.idkidknow.mineconfig.model.vanilla.OSInfo
 import com.idkidknow.mineconfig.utils.{*, given}
+import com.idkidknow.mineconfig.vanilla.model.ArtifactDescription
+import com.idkidknow.mineconfig.vanilla.model.LibraryDescription
+import com.idkidknow.mineconfig.vanilla.model.OSInfo
 import fs2.io.file.Path
 import io.circe.Decoder
 import io.circe.Encoder

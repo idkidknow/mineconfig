@@ -1,4 +1,4 @@
-package com.idkidknow.mineconfig.model.vanilla
+package com.idkidknow.mineconfig.vanilla.model
 
 import cats.syntax.all.*
 import io.circe.Decoder

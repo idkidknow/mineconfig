@@ -1,4 +1,4 @@
-package com.idkidknow.mineconfig.procedure.mcpconfig
+package com.idkidknow.mineconfig.mcpconfig.procedure
 
 import cats.effect.Concurrent
 import cats.effect.implicits.*
@@ -6,7 +6,7 @@ import cats.syntax.all.*
 import com.idkidknow.mineconfig.algebra.MavenCache
 import com.idkidknow.mineconfig.algebra.StringRW
 import com.idkidknow.mineconfig.algebra.ZipFile
-import com.idkidknow.mineconfig.model.mcpconfig.FunctionDescription
+import com.idkidknow.mineconfig.mcpconfig.model.FunctionDescription
 import com.idkidknow.mineconfig.utils.*
 import fs2.io.file.Path
 import io.circe.Decoder
@@ -21,6 +21,12 @@ private def readConfigJson[F[_]: Concurrent](zipFile: ZipFile[F]): F[Json] = {
   str.map(io.circe.parser.parse).rethrow
 }
 
+/** Read `functions` field in `config.json` and downloads these functions.
+ *
+ *  Write a description file in the format
+ *  `Map[String, FunctionDescription.Local]` (see [[FunctionDescription.Local]])
+ *  which provides necessary information to execute the function.
+ */
 def downloadFunctions[
     F[_]: {Concurrent, ZipFile.Read, MavenCache, StringRW}
 ](

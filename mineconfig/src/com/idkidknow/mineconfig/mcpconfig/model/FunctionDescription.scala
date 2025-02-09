@@ -1,4 +1,4 @@
-package com.idkidknow.mineconfig.model.mcpconfig
+package com.idkidknow.mineconfig.mcpconfig.model
 
 import cats.Functor
 import cats.syntax.all.*
