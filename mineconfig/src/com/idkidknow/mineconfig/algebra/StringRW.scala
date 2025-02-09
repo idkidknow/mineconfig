@@ -1,7 +1,7 @@
 package com.idkidknow.mineconfig.algebra
 
 import cats.MonadThrow
-import cats.effect.kernel.Async
+import cats.effect.kernel.Concurrent
 import cats.syntax.all.*
 import fs2.io.file.Files
 import fs2.io.file.Path
@@ -20,13 +20,15 @@ trait StringRW[F[_]] {
 object StringRW {
   def apply[F[_]: StringRW as inst]: StringRW[F] = inst
 
-  def fromAsync[F[_]: Async]: StringRW[F] = new StringRW[F] {
-    override def readAsString(path: Path): F[String] =
-      Files[F].readUtf8(path).compile.string
+  given fromConcurrentFiles[F[_]: {Concurrent, Files}]: StringRW[F] =
+    new StringRW[F] {
+      override def readAsString(path: Path): F[String] =
+        Files[F].readUtf8(path).compile.string
 
-    @SuppressWarnings(Array("org.wartremover.warts.Any"))
-    override def writeString(path: Path, content: String): F[Unit] =
-      path.parent.map(Files[F].createDirectories(_)).sequence.void >>
-        fs2.Stream(content).through(Files[F].writeUtf8(path)).compile.drain
-  }
+      @SuppressWarnings(Array("org.wartremover.warts.Any"))
+      override def writeString(path: Path, content: String): F[Unit] =
+        path.parent.map(Files[F].createDirectories(_)).sequence.void >>
+          fs2.Stream(content).through(Files[F].writeUtf8(path)).compile.drain
+    }
+
 }

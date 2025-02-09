@@ -3,11 +3,14 @@ package com.idkidknow.mineconfig.mcpconfig.procedure
 import cats.effect.Concurrent
 import cats.effect.implicits.*
 import cats.syntax.all.*
+import com.idkidknow.mineconfig.algebra.JarArchive
 import com.idkidknow.mineconfig.algebra.MavenCache
 import com.idkidknow.mineconfig.algebra.StringRW
 import com.idkidknow.mineconfig.algebra.ZipFile
 import com.idkidknow.mineconfig.mcpconfig.model.FunctionDescription
 import com.idkidknow.mineconfig.utils.*
+import fs2.Stream
+import fs2.io.file.Files
 import fs2.io.file.Path
 import io.circe.Decoder
 import io.circe.Json
@@ -47,3 +50,23 @@ def downloadFunctions[
     desc.parUnorderedTraverse(_.cache(javaTarget))
   _ <- StringRW[F].writeString(outputDescription, local.asJson.spaces2)
 } yield ()
+
+/** Main part of `strip` function in mcpconfig */
+@SuppressWarnings(Array("org.wartremover.warts.Any"))
+def strip[F[_]: {Concurrent, Files, JarArchive}](
+    inputJar: Path,
+    classList: List[String],
+    whitelist: Boolean,
+    output: Path,
+): F[Unit] = Files[F].readAll(inputJar)
+  .through(JarArchive[F].unarchive)
+  .flatMap { case (entry, bytes) =>
+    if (!entry.isDirectory && whitelist == classList.contains(entry.getName)) {
+      Stream.emit((entry, bytes))
+    } else {
+      Stream.exec(bytes.compile.drain)
+    }
+  }
+  .through(JarArchive[F].archive)
+  .through(Files[F].writeAll(output))
+  .compile.drain

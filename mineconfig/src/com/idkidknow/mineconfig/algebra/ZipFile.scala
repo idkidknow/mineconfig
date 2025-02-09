@@ -21,8 +21,8 @@ object ZipFile {
 
     def fromAsync[F[_]: Async as F]: Read[F] = (zip: Path) =>
       Resource.make(
-        F.delay(new JZipFile(zip.toNioPath.toFile))
-      )(zipFile => F.delay(zipFile.close()))
+        F.blocking(new JZipFile(zip.toNioPath.toFile))
+      )(zipFile => F.blocking(zipFile.close()))
         .map { jZipFile => entryName =>
           fs2.io.readInputStream(
             F.delay(jZipFile.getInputStream(jZipFile.getEntry(entryName))),
