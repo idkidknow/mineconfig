@@ -3,6 +3,7 @@ package com.idkidknow.mineconfig.algebra
 import cats.MonadThrow
 import cats.effect.kernel.Concurrent
 import cats.syntax.all.*
+import com.idkidknow.mineconfig.utils.*
 import fs2.io.file.Files
 import fs2.io.file.Path
 import io.circe.Json
@@ -27,8 +28,7 @@ object StringRW {
 
       @SuppressWarnings(Array("org.wartremover.warts.Any"))
       override def writeString(path: Path, content: String): F[Unit] =
-        path.parent.map(Files[F].createDirectories(_)).sequence.void >>
-          fs2.Stream(content).through(Files[F].writeUtf8(path)).compile.drain
+        fs2.Stream(content).through(Files[F].writeUtf8R(path)).compile.drain
     }
 
 }

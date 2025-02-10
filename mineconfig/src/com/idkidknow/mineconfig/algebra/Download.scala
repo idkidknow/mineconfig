@@ -5,6 +5,7 @@ import cats.effect.kernel.Async
 import cats.effect.std.Console
 import cats.effect.std.Semaphore
 import cats.syntax.all.*
+import com.idkidknow.mineconfig.utils.*
 import fs2.Stream
 import fs2.hashing.HashAlgorithm
 import fs2.hashing.Hashing
@@ -47,8 +48,7 @@ object Download {
         }
         Console.make[F].println(show"Downloading $url to $dest") >>
           semaphore.acquire >>
-          dest.parent.map(Files[F].createDirectories(_)).sequence.void >>
-          s.through(Files[F].writeAll(dest)).compile.drain >>
+          s.through(Files[F].writeAllR(dest)).compile.drain >>
           semaphore.release
       }
 

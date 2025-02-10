@@ -29,6 +29,7 @@ object mineconfig extends ScalaModule with PublishModule with ScalafixModule {
     ivy"io.circe::circe-optics:0.15.0",
     ivy"io.get-coursier:coursier_2.13:2.1.24",
     ivy"io.get-coursier:coursier-jvm_2.13:2.1.24",
+    ivy"net.neoforged:srgutils:1.0.9",
   )
 
   override def pomSettings: T[PomSettings] = PomSettings(

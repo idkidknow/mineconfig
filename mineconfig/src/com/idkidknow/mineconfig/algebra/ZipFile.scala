@@ -7,10 +7,13 @@ import cats.effect.kernel.Resource
 import fs2.Stream
 import fs2.io.file.Path
 
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile as JZipFile
 
 trait ZipFile[F[_]] {
   def readEntry(name: String): F[Option[Stream[F, Byte]]]
+
+  def getEntries: Stream[F, ZipEntry]
 
   def readEntryAsString(
       name: String
@@ -34,13 +37,21 @@ object ZipFile {
       Resource.make(
         F.blocking(new JZipFile(zip.toNioPath.toFile))
       )(zipFile => F.blocking(zipFile.close()))
-        .map { jZipFile => entryName =>
-          OptionT(F.delay(Option(jZipFile.getEntry(entryName)))).map { entry =>
-            fs2.io.readInputStream(
-              F.delay(jZipFile.getInputStream(entry)),
-              8192,
-            )
-          }.value
+        .map { jZipFile =>
+          new ZipFile[F] {
+            override def readEntry(name: String): F[Option[Stream[F, Byte]]] =
+              OptionT(F.delay(Option(jZipFile.getEntry(name)))).map { entry =>
+                fs2.io.readInputStream(
+                  F.delay(jZipFile.getInputStream(entry)),
+                  8192,
+                )
+              }.value
+
+            override def getEntries: Stream[F, ZipEntry] = {
+              import scala.jdk.CollectionConverters.*
+              Stream.fromIterator(jZipFile.entries().asScala, 32)
+            }
+          }
         }
   }
 }

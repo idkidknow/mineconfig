@@ -19,7 +19,9 @@ import io.circe.Json
 import io.circe.Printer
 import io.circe.optics.JsonPath.root
 import io.circe.syntax.*
+import net.neoforged.srgutils.MinecraftVersion
 
+import java.util.jar.JarEntry
 import java.util.jar.Manifest
 
 private def readConfigJson[F[_]: Concurrent](zipFile: ZipFile[F]): F[Json] = {
@@ -72,7 +74,7 @@ def strip[F[_]: {Concurrent, Files, JarArchive}](
     }
   }
   .through(JarArchive[F].archive)
-  .through(Files[F].writeAll(output))
+  .through(Files[F].writeAllR(output))
   .compile.drain
 
 /** Main part of `listLibraries` function in mcpconfig when the arg `bundle` is
@@ -116,12 +118,11 @@ def listBundleLibraries[F[_]: {Async as F, ZipFile.Read, Files}](
 
       @SuppressWarnings(Array("org.wartremover.warts.Any"))
       val extract: F[Unit] =
-        dest.parent.map(Files[F].createDirectories(_)).sequence.void >>
-          Stream.eval(
-            zipFile.readEntry(show"META-INF/libraries/$entryName")
-              .flatMap(_.expect(show"Library $entryName not found"))
-          ).flatten.through(Files[F].writeAll(dest))
-            .compile.drain
+        Stream.eval(
+          zipFile.readEntry(show"META-INF/libraries/$entryName")
+            .flatMap(_.expect(show"Library $entryName not found"))
+        ).flatten.through(Files[F].writeAllR(dest))
+          .compile.drain
 
       extract >> (mavenName, dest).pure[F]
     }
@@ -133,5 +134,76 @@ def listBundleLibraries[F[_]: {Async as F, ZipFile.Read, Files}](
       Printer.spaces2.copy(dropNullValues = true)
         .print(desc.asJson),
     )
+  } yield ()
+}
+
+def inject[F[_]: {Concurrent, ZipFile.Read, JarArchive, Files}](
+    inputJar: Path,
+    mcpconfigZip: Path,
+    output: Path,
+): F[Unit] = ZipFile.Read[F].read(mcpconfigZip).use { zipFile =>
+  for {
+    json: Json <- readConfigJson(zipFile)
+    mcVersion <- root.version.string.getOption(json)
+      .map(MinecraftVersion.from)
+      .expect("version not found in config.json")
+    prefix: String <- root.data.inject.string.getOption(json)
+      .expect("inject data not found in config.json")
+    template: Option[String] <-
+      zipFile.readEntryAsString(prefix + "package-info-template.java")
+    addition: Stream[F, (JarEntry, Stream[F, Byte])] =
+      zipFile.getEntries.filter { entry =>
+        !entry.isDirectory &&
+        entry.getName.startsWith(prefix) &&
+        entry.getName != prefix + "package-info-template.java"
+      }.flatMap { entry =>
+        val entryName = entry.getName
+        Stream.eval(
+          zipFile.readEntry(entryName)
+            .flatMap(_.expect(show"failed to read entry $entryName"))
+        ).map { stream =>
+          new JarEntry(entryName.substring(prefix.length)) -> stream
+        }
+      }
+
+    visited <- Concurrent[F].ref(Set.empty[String])
+    out = Files[F].readAll(inputJar)
+      .through(JarArchive[F].unarchive)
+      .flatMap { case (entry, bytes) =>
+        Stream(entry -> bytes) ++
+          (template match {
+            case None => Stream.empty
+            case Some(template) =>
+              val entryName = entry.getName
+              val pkg = if (entry.isDirectory && !entryName.endsWith("/")) {
+                entryName
+              } else {
+                entryName.lastIndexOf("/") match {
+                  case -1 => ""
+                  case i => entryName.substring(0, i)
+                }
+              }
+              val extraEntry =
+                if (
+                  pkg.startsWith("net/minecraft/")
+                  || (pkg.startsWith("com/mojang/") &&
+                    mcVersion.compareTo(MinecraftVersion.from("1.14.4")) > 0)
+                ) {
+                  val str = template.replace("{PACKAGE}", pkg.replace("/", "."))
+                  Stream(
+                    new JarEntry(pkg + "/package-info.java") ->
+                      Stream(str).through(fs2.text.utf8.encode)
+                  )
+                } else Stream.empty
+              Stream.eval(visited.get).map(_.contains(pkg)).ifM(
+                ifTrue = Stream.empty,
+                ifFalse = Stream.exec(visited.update(_ + pkg)) ++ extraEntry,
+              )
+          })
+      } ++ addition
+    _ <- out
+      .through(JarArchive[F].archive)
+      .through(Files[F].writeAllR(output))
+      .compile.drain
   } yield ()
 }
